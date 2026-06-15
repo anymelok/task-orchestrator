@@ -14,7 +14,25 @@
 ```bash
 git clone https://github.com/anymelok/task-orchestrator
 cd task-orchestrator
+```
 
+Заполните файл .env:
+```env
+DEBUG=True
+SECRET_KEY=insecure-key
+ALLOWED_HOSTS=127.0.0.1,localhost
+
+DATABASE_URL=mysql://orchestrator_user:orchestrator_password@127.0.0.1:3307/orchestrator
+
+# Celery Redis
+CELERY_BROKER_URL=redis://127.0.0.1:6379/0
+CELERY_RESULT_BACKEND=redis://127.0.0.1:6379/0
+
+AGENT_CLIENT_CLASS=orchestrator.agent.MockAgentClient
+```
+
+Запуск:
+```
 # Запуск всего стека из 8 контейнеров (Django, Celery, MySQL, Redis, Exporter, Prometheus, Grafana)
 docker compose up -d --build
 ```
