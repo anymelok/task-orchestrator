@@ -1,0 +1,54 @@
+[project]
+name = "task-orchestrator"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "celery>=5.6.3",
+    "cryptography>=48.0.0",
+    "django>=6.0.6",
+    "django-environ>=0.13.0",
+    "django-prometheus>=2.5.0",
+    "gunicorn>=26.0.0",
+    "pymysql>=1.2.0",
+    "redis>=8.0.0",
+]
+
+[dependency-groups]
+dev = [
+    "django-stubs>=6.0.5",
+    "django-types>=0.24.0",
+    "locust>=2.44.1",
+    "mypy>=2.1.0",
+    "pytest>=9.0.3",
+    "pytest-celery>=1.3.0",
+    "pytest-cov>=7.1.0",
+    "pytest-django>=4.12.0",
+    "pytest-mock>=3.15.1",
+    "ruff>=0.15.16",
+]
+
+[tool.pyright]
+reportFunctionMemberAccess = "none"
+reportArgumentType = "none"
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N"]
+ignore = []
+
+[tool.mypy]
+ignore_missing_imports = true
+disable_error_code = ["var-annotated", "no-redef", "attr-defined"]
+
+[[tool.mypy.overrides]]
+module = "*.migrations.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "orchestrator.models"
+ignore_errors = true

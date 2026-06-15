@@ -1,0 +1,141 @@
+services:
+  db:
+    image: mysql:8.0
+    container_name: orchestrator_db
+    restart: always
+    environment:
+      MYSQL_DATABASE: orchestrator
+      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_USER: orchestrator_user
+      MYSQL_PASSWORD: orchestrator_password
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "orchestrator_user", "-porchestrator_password"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: orchestrator_redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  web:
+    build: .
+    container_name: orchestrator_web
+    restart: always
+    ports:
+      - "8000:8000"
+    volumes:
+      - uv_cache:/root/.cache/uv
+    healthcheck:
+      # test: ["CMD", "curl", "-f", "http://127.0.0.1:8000/metrics"]
+      test: ["CMD", "python3", "-c", "import socket; s = socket.socket(); s.connect(('127.0.0.1', 8000))"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+    environment:
+      - DEBUG=True
+      - SECRET_KEY=django-insecure-local-dev-key-change-me-in-production
+      - ALLOWED_HOSTS=localhost,127.0.0.1,web
+      - DATABASE_URL=mysql://orchestrator_user:orchestrator_password@db:3306/orchestrator
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    command: sh -c "uv run python manage.py migrate && uv run gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 4 --threads 2"
+
+  worker:
+    build: .
+    # container_name: orchestrator_worker
+    restart: always
+    environment:
+      - DEBUG=True
+      - SECRET_KEY=django-insecure-local-dev-key-change-me-in-production
+      - DATABASE_URL=mysql://orchestrator_user:orchestrator_password@db:3306/orchestrator
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    volumes:
+      - uv_cache:/root/.cache/uv
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    command: uv run celery -A config worker --loglevel=info
+
+  beat:
+    build: .
+    container_name: orchestrator_beat
+    restart: always
+    volumes:
+      - uv_cache:/root/.cache/uv
+    environment:
+      - DEBUG=True
+      - SECRET_KEY=django-insecure-local-dev-key-change-me-in-production
+      - DATABASE_URL=mysql://orchestrator_user:orchestrator_password@db:3306/orchestrator
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    command: uv run celery -A config beat --loglevel=info
+
+  # МОНИТОРИНГ
+
+  celery_exporter:
+    image: danihodovic/celery-exporter:latest
+    container_name: orchestrator_celery_exporter
+    restart: always
+    environment:
+      - CE_BROKER_URL=redis://redis:6379/0
+    ports:
+      - "9808:9808"
+    depends_on:
+      - redis
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: orchestrator_prometheus
+    restart: always
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    depends_on:
+      web:
+        condition: service_healthy
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: orchestrator_grafana
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana_provisioning/datasources:/etc/grafana/provisioning/datasources
+      - ./grafana_provisioning/dashboards:/etc/grafana/provisioning/dashboards
+    depends_on:
+      - prometheus
+
+volumes:
+  mysql_data:
+  redis_data:
+  grafana_data:
+  uv_cache:
